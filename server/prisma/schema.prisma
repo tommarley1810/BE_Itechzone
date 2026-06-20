@@ -1,0 +1,204 @@
+// prisma/schema.prisma
+// Schema cho ITechZone
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// PRODUCT
+// ================================
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  brand         String
+  brandName     String
+  category      String
+  price         Int
+  originalPrice Int
+  stock         Int      @default(0)
+  image         String?
+  thumbnail     String?
+  images        String[]
+  rating        Float    @default(0)
+  sold          Int      @default(0)
+  status        String   @default("active")
+
+  isNew         Boolean  @default(false)
+  isBestseller  Boolean  @default(false)
+  isFlashSale   Boolean  @default(false)
+  isFeatured    Boolean  @default(false)
+
+  variants      Json?
+  specs         Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  reviews       Review[]
+
+  @@map("products")
+  @@index([category])
+  @@index([brand])
+  @@index([status])
+  @@index([slug])
+}
+
+// ================================
+// USER
+// ================================
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  password  String
+  avatar    String?
+  role      String   @default("user")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+  cart      CartItem[]
+  reviews   Review[]
+  addresses Address[]
+  requestsMade     ApprovalRequest[] @relation("RequestedBy")
+  requestsReviewed ApprovalRequest[] @relation("ReviewedBy")
+
+  @@map("users")
+  @@index([email])
+}
+
+// ================================
+// ADDRESS
+// ================================
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  fullName  String
+  phone     String
+  province  String
+  district  String
+  ward      String
+  street    String
+  isDefault Boolean @default(false)
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+// ================================
+// CART
+// ================================
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  variant   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("cart_items")
+}
+
+// ================================
+// ORDER
+// ================================
+model Order {
+  id              String   @id @default(cuid())
+  userId          String
+  status          String   @default("pending")
+  totalAmount     Int
+  note            String?
+  shippingName    String
+  shippingPhone   String
+  shippingAddress String
+  paymentMethod   String   @default("cod")
+  paymentStatus   String   @default("unpaid")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+
+  @@map("orders")
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  productId    String
+  productName  String
+  productImage String?
+  variant      Json?
+  quantity     Int
+  price        Int
+
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+// ================================
+// REVIEW
+// ================================
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("reviews")
+  @@index([productId])
+}
+
+// ================================
+// APPROVAL REQUEST (Staff workflow)
+// ================================
+model ApprovalRequest {
+  id            String   @id @default(cuid())
+  type          String   // DELETE_PRODUCT | EDIT_USER
+  status        String   @default("pending")  // pending | approved | rejected
+  requestedById String
+  reviewedById  String?
+  targetId      String   // productId or userId
+  targetName    String   // tên sản phẩm/user để hiển thị
+  payload       Json?    // dữ liệu muốn thay đổi (cho EDIT_USER)
+  note          String?  // ghi chú của staff
+  reviewNote    String?  // ghi chú của admin khi duyệt/từ chối
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requestedBy   User     @relation("RequestedBy", fields: [requestedById], references: [id])
+  reviewedBy    User?    @relation("ReviewedBy",  fields: [reviewedById],  references: [id])
+
+  @@map("approval_requests")
+  @@index([status])
+  @@index([requestedById])
+}
